@@ -95,7 +95,7 @@ class BenchmarkEngine:
         quality_checks: list[QualityCheck] = []
         for item in GOLD_DATASET:
             response = self.client.generate_text(model, item.prompt)
-            quality_checks.append(evaluate_keywords(item.prompt, response, item.keywords))
+            quality_checks.append(evaluate_keywords(item.prompt, response, item.keyword_groups))
         quality_label, quality_score = summarize_quality(quality_checks)
 
         rag_response = self.client.generate_text(model, RAG_PROMPT)
@@ -245,22 +245,61 @@ def extract_quantization(metadata: dict) -> str:
 
 
 def extract_context_window(metadata: dict) -> str:
-    details = metadata.get("details", {})
-    for key in ("context_length", "num_ctx"):
-        value = details.get(key) or metadata.get(key)
+    direct_keys = (
+        "context_length",
+        "num_ctx",
+        "context_window",
+        "max_context_length",
+        "n_ctx_train",
+    )
+    for key in direct_keys:
+        value = metadata.get(key)
         if value:
             return str(value)
-    model_info = metadata.get("model_info", {})
-    for key in (
-        "llama.context_length",
-        "general.context_length",
-        "qwen2.context_length",
-        "phi.context_length",
-    ):
-        value = model_info.get(key)
-        if value:
-            return str(value)
+
+    for parent_key in ("details", "model_info", "parameters", "info"):
+        value = metadata.get(parent_key)
+        found = find_context_value(value)
+        if found is not None:
+            return found
+
+    found = find_context_value(metadata)
+    if found is not None:
+        return found
     return "unknown"
+
+
+def find_context_value(value: object) -> str | None:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            key_normalized = str(key).casefold()
+            if "context" in key_normalized or "num_ctx" in key_normalized or "n_ctx" in key_normalized:
+                normalized = normalize_context_value(nested)
+                if normalized is not None:
+                    return normalized
+            found = find_context_value(nested)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = find_context_value(item)
+            if found is not None:
+                return found
+    return None
+
+
+def normalize_context_value(value: object) -> str | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return str(int(value)) if float(value).is_integer() else str(value)
+    if isinstance(value, str):
+        digits = "".join(char for char in value if char.isdigit())
+        if digits:
+            return digits
+        stripped = value.strip()
+        return stripped or None
+    return None
 
 
 def estimate_token_count(text: str) -> int:

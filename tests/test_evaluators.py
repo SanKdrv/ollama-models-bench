@@ -13,7 +13,11 @@ def test_keyword_evaluation_labels_high():
 
 def test_quality_summary_is_average():
     checks = [
-        evaluate_keywords("a", "gpu cpu ядра параллельно", ("gpu", "cpu", "яд", "паралл")),
+        evaluate_keywords(
+            "a",
+            "графический процессор и cpu используют ядра и параллельность",
+            (("gpu", "графическ"), ("cpu", "процессор"), ("яд",), ("паралл",)),
+        ),
         evaluate_keywords("b", "ничего релевантного", ("gpu", "cpu")),
     ]
     label, score = summarize_quality(checks)
@@ -39,3 +43,12 @@ def test_json_validation_accepts_code_fence_and_extra_text():
 ```
 """
     assert evaluate_json(response)
+
+
+def test_keyword_evaluation_accepts_synonyms():
+    check = evaluate_keywords(
+        "prompt",
+        "Графический процессор хорошо подходит для массовых одновременных вычислений.",
+        (("gpu", "графическ"), ("паралл", "массов", "одновременн")),
+    )
+    assert check.label == "High"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from typing import Iterable
 
 from .models import QualityCheck
 
@@ -10,17 +11,27 @@ from .models import QualityCheck
 @dataclass(frozen=True, slots=True)
 class GoldPrompt:
     prompt: str
-    keywords: tuple[str, ...]
+    keyword_groups: tuple[tuple[str, ...], ...]
 
 
 GOLD_DATASET = [
     GoldPrompt(
         prompt="Объясни принцип работы квантового компьютера простыми словами на русском языке.",
-        keywords=("кубит", "суперпози", "измерен", "квант"),
+        keyword_groups=(
+            ("кубит", "qubit"),
+            ("суперпози", "одновременн", "нескольких состояни"),
+            ("измерен", "наблюден"),
+            ("квант",),
+        ),
     ),
     GoldPrompt(
         prompt="Кратко опиши, чем отличается CPU от GPU, на русском языке.",
-        keywords=("паралл", "яд", "cpu", "gpu"),
+        keyword_groups=(
+            ("cpu", "процессор"),
+            ("gpu", "графическ"),
+            ("яд", "core"),
+            ("паралл", "массов", "одновременн"),
+        ),
     ),
 ]
 
@@ -37,15 +48,20 @@ RAG_PROMPT = (
 )
 RAG_EXPECTED_KEYWORDS = ("2019", "LimeDesk", "Казани")
 JSON_PROMPT = (
-    "Сгенерируй валидный JSON без markdown-обертки. "
-    'Поля: title:string, bullets:array of strings, score:number, ok:boolean.'
+    "Сгенерируй валидный JSON и верни только один JSON-объект в одну строку, без markdown и пояснений. "
+    'Используй ровно эти поля: {"title": string, "bullets": [string, string, string], "score": number, "ok": boolean}.'
 )
 
 
-def evaluate_keywords(prompt: str, response: str, keywords: tuple[str, ...]) -> QualityCheck:
+def evaluate_keywords(
+    prompt: str,
+    response: str,
+    keyword_groups: tuple[tuple[str, ...], ...] | tuple[str, ...],
+) -> QualityCheck:
     normalized = response.casefold()
-    matched = [kw for kw in keywords if kw.casefold() in normalized]
-    score = len(matched) / len(keywords) if keywords else 0.0
+    groups = normalize_keyword_groups(keyword_groups)
+    matched = [group[0] for group in groups if any(alias.casefold() in normalized for alias in group)]
+    score = len(matched) / len(groups) if groups else 0.0
     if score >= 0.75:
         label = "High"
     elif score >= 0.4:
@@ -59,6 +75,17 @@ def evaluate_keywords(prompt: str, response: str, keywords: tuple[str, ...]) -> 
         matched_keywords=matched,
         label=label,
     )
+
+
+def normalize_keyword_groups(
+    keyword_groups: tuple[tuple[str, ...], ...] | tuple[str, ...],
+) -> tuple[tuple[str, ...], ...]:
+    if not keyword_groups:
+        return ()
+    first = keyword_groups[0]
+    if isinstance(first, str):
+        return tuple((item,) for item in keyword_groups)  # type: ignore[arg-type]
+    return tuple(tuple(group) for group in keyword_groups)  # type: ignore[arg-type]
 
 
 def summarize_quality(checks: list[QualityCheck]) -> tuple[str, float]:

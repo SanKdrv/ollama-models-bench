@@ -74,6 +74,16 @@ def test_context_window_does_not_fallback_to_parameter_size():
     assert extract_context_window(metadata) == "unknown"
 
 
+def test_context_window_is_found_in_nested_ollama_metadata():
+    metadata = {
+        "model_info": {
+            "general.architecture": "gemma2",
+            "tokenizer": {"ggml": {"context_length": "8192 tokens"}},
+        }
+    }
+    assert extract_context_window(metadata) == "8192"
+
+
 def test_engine_runs_full_cycle(tmp_path):
     config = BenchmarkConfig(
         models=["phi3"],
