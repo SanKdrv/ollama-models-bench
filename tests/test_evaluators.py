@@ -29,3 +29,13 @@ def test_rag_requires_all_markers():
 def test_json_validation_accepts_expected_shape():
     assert evaluate_json('{"title":"x","bullets":["a","b"],"score":1.2,"ok":true}')
     assert not evaluate_json('{"title":"x","bullets":"bad","score":1.2,"ok":true}')
+
+
+def test_json_validation_accepts_code_fence_and_extra_text():
+    response = """Вот JSON:
+
+```json
+{"title":"x","bullets":["a"],"score":1,"ok":true}
+```
+"""
+    assert evaluate_json(response)

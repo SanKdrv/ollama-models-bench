@@ -26,4 +26,12 @@ jobs:
 
       - name: Run Benchmark
         run: |
-          .venv/bin/ollama-bench --models default_top --mode gpu --rounds 3 --output md
+          .venv/bin/ollama-bench --models default_top --mode cpu --rounds 3 --output md
+
+      - name: Upload Benchmark Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report
+          path: benchmark_report_*.md
+          if-no-files-found: warn

@@ -80,10 +80,9 @@ def evaluate_rag(response: str) -> bool:
 
 
 def evaluate_json(response: str) -> bool:
-    candidate = response.strip()
-    if candidate.startswith("```"):
-        candidate = re.sub(r"^```[a-zA-Z]*\n?", "", candidate)
-        candidate = re.sub(r"\n?```$", "", candidate)
+    candidate = extract_json_candidate(response)
+    if candidate is None:
+        return False
     try:
         payload = json.loads(candidate)
     except json.JSONDecodeError:
@@ -96,3 +95,26 @@ def evaluate_json(response: str) -> bool:
         and isinstance(payload.get("score"), (int, float))
         and isinstance(payload.get("ok"), bool)
     )
+
+
+def extract_json_candidate(response: str) -> str | None:
+    candidate = response.strip()
+    if candidate.startswith("```"):
+        candidate = re.sub(r"^```[a-zA-Z]*\n?", "", candidate)
+        candidate = re.sub(r"\n?```$", "", candidate)
+    try:
+        json.loads(candidate)
+        return candidate
+    except json.JSONDecodeError:
+        pass
+
+    start = candidate.find("{")
+    end = candidate.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    snippet = candidate[start : end + 1]
+    try:
+        json.loads(snippet)
+    except json.JSONDecodeError:
+        return None
+    return snippet

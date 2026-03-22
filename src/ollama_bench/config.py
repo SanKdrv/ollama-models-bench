@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 DEFAULT_MODELS = {
-    "cpu": ["phi3", "mistral", "qwen2:1.5b", "llama3.2:3b"],
+    "cpu": ["phi3:mini", "qwen2:1.5b", "llama3.2:3b", "gemma2:2b"],
     "gpu": ["llama3:8b", "mistral", "phi3", "qwen2"],
 }
 

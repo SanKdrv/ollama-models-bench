@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+import pytest
+
 from ollama_bench.benchmarking import BenchmarkEngine, extract_context_window, extract_quantization
 from ollama_bench.config import BenchmarkConfig
+from ollama_bench.ollama_client import OllamaError
 
 
 class FakeClient:
@@ -66,6 +69,11 @@ def test_extract_helpers():
     assert extract_context_window(metadata) == "32768"
 
 
+def test_context_window_does_not_fallback_to_parameter_size():
+    metadata = {"details": {"parameter_size": "8.0B"}}
+    assert extract_context_window(metadata) == "unknown"
+
+
 def test_engine_runs_full_cycle(tmp_path):
     config = BenchmarkConfig(
         models=["phi3"],
@@ -88,3 +96,51 @@ def test_engine_runs_full_cycle(tmp_path):
     assert "pull:phi3" in client.events
     assert "rm:phi3" in client.events
     assert report_path.endswith(".json")
+
+
+def test_gpu_mode_requires_available_gpu(tmp_path, monkeypatch):
+    config = BenchmarkConfig(
+        models=["phi3"],
+        mode="gpu",
+        rounds=1,
+        output_format="json",
+        output_dir=tmp_path,
+    )
+    engine = BenchmarkEngine(config=config, client=FakeClient())
+    monkeypatch.setattr(engine, "_gpu_available", lambda: False)
+
+    with pytest.raises(OllamaError, match="GPU mode requested"):
+        engine.run()
+
+
+def test_memory_usage_reads_ollama_processes(tmp_path, monkeypatch):
+    class FakeMemInfo:
+        def __init__(self, rss: int) -> None:
+            self.rss = rss
+
+    class FakeProcess:
+        def __init__(self, name: str, rss_mb: float) -> None:
+            self.info = {"name": name, "cmdline": [name]}
+            self._rss = int(rss_mb * 1024 * 1024)
+
+        def memory_info(self):
+            return FakeMemInfo(self._rss)
+
+    config = BenchmarkConfig(
+        models=["phi3"],
+        mode="cpu",
+        rounds=1,
+        output_format="json",
+        output_dir=tmp_path,
+    )
+    engine = BenchmarkEngine(config=config, client=FakeClient())
+    monkeypatch.setattr(
+        "ollama_bench.benchmarking.psutil.process_iter",
+        lambda attrs: [
+            FakeProcess("ollama", 100),
+            FakeProcess("ollama serve", 50),
+            FakeProcess("python", 999),
+        ],
+    )
+
+    assert engine._memory_usage_mb() == 150

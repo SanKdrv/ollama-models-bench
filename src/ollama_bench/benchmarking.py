@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import time
@@ -35,9 +36,8 @@ class BenchmarkEngine:
             base_url=config.ollama_base_url,
             timeout_seconds=config.timeout_seconds,
         )
-        self.process = psutil.Process()
-
     def run(self, progress_callback=None) -> tuple[list[BenchmarkResult], str]:
+        self._validate_environment()
         self.client.healthcheck()
         results: list[BenchmarkResult] = []
         total_models = len(self.config.models)
@@ -137,7 +137,7 @@ class BenchmarkEngine:
             if first_token_at is None and chunk.get("response"):
                 first_token_at = now
             token_count += estimate_token_count(chunk.get("response", ""))
-            peak_memory = max(peak_memory, self._memory_usage_mb())
+            peak_memory = max_optional(peak_memory, self._memory_usage_mb())
             gpu_usage = self._gpu_memory_mb()
             if gpu_usage is not None:
                 peak_vram = max(peak_vram or 0.0, gpu_usage)
@@ -152,14 +152,47 @@ class BenchmarkEngine:
         tps = token_count / generation_duration if token_count else 0.0
         return (ttft, tps, ResourceSnapshot(peak_memory, peak_vram))
 
-    def _memory_usage_mb(self) -> float:
-        return self.process.memory_info().rss / (1024 * 1024)
+    def _validate_environment(self) -> None:
+        if self.config.mode == "gpu" and not self._gpu_available():
+            raise OllamaError(
+                "GPU mode requested, but no compatible GPU telemetry backend was found "
+                "(expected nvidia-smi or rocm-smi)."
+            )
+
+    def _memory_usage_mb(self) -> float | None:
+        usages = []
+        for process in self._ollama_processes():
+            try:
+                usages.append(process.memory_info().rss / (1024 * 1024))
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return sum(usages) if usages else None
+
+    def _ollama_processes(self) -> list[psutil.Process]:
+        processes: list[psutil.Process] = []
+        for process in psutil.process_iter(["name", "cmdline"]):
+            try:
+                name = (process.info.get("name") or "").casefold()
+                cmdline = " ".join(process.info.get("cmdline") or []).casefold()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            if "ollama" in name or "ollama" in cmdline:
+                processes.append(process)
+        return processes
+
+    def _gpu_available(self) -> bool:
+        return shutil.which("nvidia-smi") is not None or shutil.which("rocm-smi") is not None
 
     def _gpu_memory_mb(self) -> float | None:
         if self.config.mode != "gpu":
             return None
-        if shutil.which("nvidia-smi") is None:
-            return None
+        if shutil.which("nvidia-smi") is not None:
+            return self._read_nvidia_memory_mb()
+        if shutil.which("rocm-smi") is not None:
+            return self._read_rocm_memory_mb()
+        return None
+
+    def _read_nvidia_memory_mb(self) -> float | None:
         completed = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
             capture_output=True,
@@ -179,6 +212,32 @@ class BenchmarkEngine:
                 continue
         return max(values) if values else None
 
+    def _read_rocm_memory_mb(self) -> float | None:
+        completed = subprocess.run(
+            ["rocm-smi", "--showmeminfo", "vram", "--json"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            return None
+        try:
+            payload = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return None
+        values = []
+        for value in payload.values():
+            if not isinstance(value, dict):
+                continue
+            used = value.get("VRAM Total Used Memory (B)") or value.get("vram_used")
+            if used is None:
+                continue
+            try:
+                values.append(float(used) / (1024 * 1024))
+            except (TypeError, ValueError):
+                continue
+        return max(values) if values else None
+
 
 def extract_quantization(metadata: dict) -> str:
     details = metadata.get("details", {})
@@ -187,12 +246,17 @@ def extract_quantization(metadata: dict) -> str:
 
 def extract_context_window(metadata: dict) -> str:
     details = metadata.get("details", {})
-    for key in ("parameter_size", "context_length", "num_ctx"):
+    for key in ("context_length", "num_ctx"):
         value = details.get(key) or metadata.get(key)
         if value:
             return str(value)
     model_info = metadata.get("model_info", {})
-    for key in ("llama.context_length", "general.context_length"):
+    for key in (
+        "llama.context_length",
+        "general.context_length",
+        "qwen2.context_length",
+        "phi.context_length",
+    ):
         value = model_info.get(key)
         if value:
             return str(value)
@@ -201,6 +265,11 @@ def extract_context_window(metadata: dict) -> str:
 
 def estimate_token_count(text: str) -> int:
     return max(1, len(text.split())) if text.strip() else 0
+
+
+def max_optional(left: float | None, right: float | None) -> float | None:
+    values = [value for value in (left, right) if value is not None]
+    return max(values) if values else None
 
 
 def notify(callback, message: str) -> None:
