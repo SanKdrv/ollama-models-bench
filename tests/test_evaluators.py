@@ -1,4 +1,10 @@
-from ollama_bench.evaluators import evaluate_json, evaluate_keywords, evaluate_rag, summarize_quality
+from ollama_bench.evaluators import (
+    evaluate_json,
+    evaluate_keywords,
+    evaluate_rag,
+    summarize_quality,
+    summarize_quality_by_category,
+)
 
 
 def test_keyword_evaluation_labels_high():
@@ -6,6 +12,7 @@ def test_keyword_evaluation_labels_high():
         "prompt",
         "Кубит использует суперпозицию, а квантовое измерение разрушает состояние.",
         ("кубит", "суперпози", "измерен", "квант"),
+        category="factual",
     )
     assert check.label == "High"
     assert check.score == 1.0
@@ -17,8 +24,9 @@ def test_quality_summary_is_average():
             "a",
             "графический процессор и cpu используют ядра и параллельность",
             (("gpu", "графическ"), ("cpu", "процессор"), ("яд",), ("паралл",)),
+            category="instruction_following",
         ),
-        evaluate_keywords("b", "ничего релевантного", ("gpu", "cpu")),
+        evaluate_keywords("b", "ничего релевантного", ("gpu", "cpu"), category="factual"),
     ]
     label, score = summarize_quality(checks)
     assert label == "Medium"
@@ -50,5 +58,18 @@ def test_keyword_evaluation_accepts_synonyms():
         "prompt",
         "Графический процессор хорошо подходит для массовых одновременных вычислений.",
         (("gpu", "графическ"), ("паралл", "массов", "одновременн")),
+        category="instruction_following",
     )
     assert check.label == "High"
+
+
+def test_quality_summary_by_category():
+    checks = [
+        evaluate_keywords("a", "квант кубит", ("квант", "кубит"), category="factual"),
+        evaluate_keywords("b", "1. 2. 3. шаги", (("1.",), ("2.",), ("3.",)), category="formatting"),
+        evaluate_keywords("c", "cpu gpu", ("cpu", "gpu"), category="instruction_following"),
+    ]
+    scores = summarize_quality_by_category(checks)
+    assert scores["factual"] == 1.0
+    assert scores["formatting"] == 1.0
+    assert scores["instruction_following"] == 1.0

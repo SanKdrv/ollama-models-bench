@@ -12,6 +12,9 @@ def test_markdown_report_contains_core_columns():
         vram_peak_mb=None,
         quality_ru_label="High",
         quality_ru_score=0.9,
+        factual_score=0.95,
+        instruction_following_score=0.85,
+        formatting_score=0.75,
         rag_passed=True,
         json_match=True,
         context_window="8192",
@@ -23,3 +26,5 @@ def test_markdown_report_contains_core_columns():
     assert "llama3" in rendered
     assert "Q4_K_M" in rendered
     assert "Pass" in rendered
+    assert "0.90" in rendered
+    assert "0.95" in rendered

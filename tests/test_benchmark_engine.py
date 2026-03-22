@@ -35,7 +35,7 @@ class FakeClient:
         }
 
     def generate_stream(self, model: str, prompt: str, options=None) -> Iterable[dict]:
-        if "валидный JSON" in prompt:
+        if "ровно эти поля" in prompt:
             yield {"response": '{"title":"x","bullets":["a"],"score":1,"ok":true}'}
             yield {"response": "", "done": True}
             return
@@ -47,8 +47,24 @@ class FakeClient:
             yield {"response": "Кубит суперпозиция квант измерен"}
             yield {"response": "", "done": True}
             return
+        if "зачем в RAG нужен внешний контекст" in prompt:
+            yield {"response": "Внешний контекст и поиск по источникам снижают галлюцинации, потому что ответ опирается на документы."}
+            yield {"response": "", "done": True}
+            return
         if "CPU от GPU" in prompt:
             yield {"response": "CPU GPU яд паралл"}
+            yield {"response": "", "done": True}
+            return
+        if "ровно двумя короткими пунктами" in prompt:
+            yield {"response": "- приватность\n- офлайн"}
+            yield {"response": "", "done": True}
+            return
+        if "Верни на русском JSON без markdown" in prompt:
+            yield {"response": '{"summary":"ok","risks":["a","b"],"ready":true}'}
+            yield {"response": "", "done": True}
+            return
+        if "Ответь на русском в формате" in prompt:
+            yield {"response": "Заголовок\nШаги:\n1. Первый\n2. Второй\n3. Третий"}
             yield {"response": "", "done": True}
             return
         yield {"response": "локальные llm быстрее"}
@@ -103,6 +119,10 @@ def test_engine_runs_full_cycle(tmp_path):
     assert result.json_match is True
     assert result.rag_passed is True
     assert result.quality_ru_label == "High"
+    assert result.quality_ru_score == 1.0
+    assert result.factual_score == 1.0
+    assert result.instruction_following_score == 1.0
+    assert result.formatting_score == 1.0
     assert "pull:phi3" in client.events
     assert "rm:phi3" in client.events
     assert report_path.endswith(".json")

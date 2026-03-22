@@ -17,6 +17,7 @@ from .evaluators import (
     evaluate_keywords,
     evaluate_rag,
     summarize_quality,
+    summarize_quality_by_category,
 )
 from .models import BenchmarkResult, QualityCheck
 from .ollama_client import OllamaClient, OllamaError
@@ -57,6 +58,9 @@ class BenchmarkEngine:
                     vram_peak_mb=None,
                     quality_ru_label="Low",
                     quality_ru_score=0.0,
+                    factual_score=0.0,
+                    instruction_following_score=0.0,
+                    formatting_score=0.0,
                     rag_passed=False,
                     json_match=False,
                     context_window="unknown",
@@ -95,8 +99,16 @@ class BenchmarkEngine:
         quality_checks: list[QualityCheck] = []
         for item in GOLD_DATASET:
             response = self.client.generate_text(model, item.prompt)
-            quality_checks.append(evaluate_keywords(item.prompt, response, item.keyword_groups))
+            quality_checks.append(
+                evaluate_keywords(
+                    item.prompt,
+                    response,
+                    item.keyword_groups,
+                    category=item.category,
+                )
+            )
         quality_label, quality_score = summarize_quality(quality_checks)
+        category_scores = summarize_quality_by_category(quality_checks)
 
         rag_response = self.client.generate_text(model, RAG_PROMPT)
         json_response = self.client.generate_text(model, JSON_PROMPT)
@@ -117,6 +129,9 @@ class BenchmarkEngine:
             vram_peak_mb=peak_vram,
             quality_ru_label=quality_label,
             quality_ru_score=quality_score,
+            factual_score=category_scores.get("factual", 0.0),
+            instruction_following_score=category_scores.get("instruction_following", 0.0),
+            formatting_score=category_scores.get("formatting", 0.0),
             rag_passed=evaluate_rag(rag_response),
             json_match=evaluate_json(json_response),
             context_window=extract_context_window(metadata),

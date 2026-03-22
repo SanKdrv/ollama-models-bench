@@ -3,6 +3,9 @@ name: Bench On Stand
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   bench:
     runs-on: [self-hosted, Linux, X64]
@@ -27,6 +30,51 @@ jobs:
       - name: Run Benchmark
         run: |
           .venv/bin/ollama-bench --models default_top --mode cpu --rounds 3 --output md
+
+      - name: Update RESULT.md
+        if: success()
+        run: |
+          latest_report="$(ls -t benchmark_report_*.md | head -n 1)"
+          runner_name="${RUNNER_NAME:-unknown}"
+          machine_name="$(hostname 2>/dev/null || echo unknown)"
+          os_name="$(uname -srm 2>/dev/null || echo unknown)"
+          cpu_model="$(awk -F: '/model name/ {gsub(/^[ \t]+/, "", $2); print $2; exit}' /proc/cpuinfo 2>/dev/null)"
+          if [ -z "$cpu_model" ]; then
+            cpu_model="$(lscpu 2>/dev/null | awk -F: '/Model name/ {gsub(/^[ \t]+/, "", $2); print $2; exit}')"
+          fi
+          [ -n "$cpu_model" ] || cpu_model="unknown"
+          cpu_cores="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo unknown)"
+          ram_total_mb="$(awk '/MemTotal/ {printf "%.0f", $2/1024}' /proc/meminfo 2>/dev/null)"
+          [ -n "$ram_total_mb" ] || ram_total_mb="unknown"
+          benchmark_time="$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          {
+            echo "# Benchmark Result"
+            echo
+            echo "- Timestamp: $benchmark_time"
+            echo "- Runner: $runner_name"
+            echo "- Host: $machine_name"
+            echo "- OS: $os_name"
+            echo "- CPU: $cpu_model"
+            echo "- CPU cores: $cpu_cores"
+            echo "- RAM total: ${ram_total_mb}MB"
+            echo "- Mode: cpu"
+            echo "- Models: default_top"
+            echo "- Rounds: 3"
+            echo
+            cat "$latest_report"
+          } > RESULT.md
+
+      - name: Commit Updated RESULT.md
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add RESULT.md
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Update benchmark results"
+          git push
 
       - name: Upload Benchmark Report
         if: always()

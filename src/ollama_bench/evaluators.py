@@ -3,19 +3,20 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Iterable
 
 from .models import QualityCheck
 
 
 @dataclass(frozen=True, slots=True)
 class GoldPrompt:
+    category: str
     prompt: str
     keyword_groups: tuple[tuple[str, ...], ...]
 
 
 GOLD_DATASET = [
     GoldPrompt(
+        category="factual",
         prompt="Объясни принцип работы квантового компьютера простыми словами на русском языке.",
         keyword_groups=(
             ("кубит", "qubit"),
@@ -25,12 +26,52 @@ GOLD_DATASET = [
         ),
     ),
     GoldPrompt(
+        category="instruction_following",
         prompt="Кратко опиши, чем отличается CPU от GPU, на русском языке.",
         keyword_groups=(
             ("cpu", "процессор"),
             ("gpu", "графическ"),
             ("яд", "core"),
             ("паралл", "массов", "одновременн"),
+        ),
+    ),
+    GoldPrompt(
+        category="factual",
+        prompt="Объясни на русском, зачем в RAG нужен внешний контекст и почему это снижает галлюцинации.",
+        keyword_groups=(
+            ("контекст", "документ", "источник"),
+            ("галлюцина", "ошибк", "неточност"),
+            ("поиск", "retrieval", "извлеч"),
+            ("основан", "опира", "подтвержд"),
+        ),
+    ),
+    GoldPrompt(
+        category="instruction_following",
+        prompt="Ответь на русском ровно двумя короткими пунктами: чем полезны локальные LLM для приватности и офлайн-работы?",
+        keyword_groups=(
+            ("приват", "конфиденц"),
+            ("офлайн", "без интернета", "локальн"),
+            ("- ", "1.", "2."),
+        ),
+    ),
+    GoldPrompt(
+        category="formatting",
+        prompt="Верни на русском JSON без markdown: {\"summary\": string, \"risks\": [string, string], \"ready\": boolean}.",
+        keyword_groups=(
+            ("summary",),
+            ("risks",),
+            ("ready",),
+        ),
+    ),
+    GoldPrompt(
+        category="formatting",
+        prompt="Ответь на русском в формате: Заголовок, затем строка 'Шаги:', затем три нумерованных пункта.",
+        keyword_groups=(
+            ("заголов",),
+            ("шаги",),
+            ("1.", "1)", "1 "),
+            ("2.", "2)", "2 "),
+            ("3.", "3)", "3 "),
         ),
     ),
 ]
@@ -57,6 +98,7 @@ def evaluate_keywords(
     prompt: str,
     response: str,
     keyword_groups: tuple[tuple[str, ...], ...] | tuple[str, ...],
+    category: str = "general",
 ) -> QualityCheck:
     normalized = response.casefold()
     groups = normalize_keyword_groups(keyword_groups)
@@ -69,6 +111,7 @@ def evaluate_keywords(
     else:
         label = "Low"
     return QualityCheck(
+        category=category,
         prompt=prompt,
         response=response,
         score=score,
@@ -99,6 +142,15 @@ def summarize_quality(checks: list[QualityCheck]) -> tuple[str, float]:
     else:
         label = "Low"
     return (label, round(score, 3))
+
+
+def summarize_quality_by_category(checks: list[QualityCheck]) -> dict[str, float]:
+    if not checks:
+        return {}
+    buckets: dict[str, list[float]] = {}
+    for check in checks:
+        buckets.setdefault(check.category, []).append(check.score)
+    return {key: round(sum(values) / len(values), 3) for key, values in buckets.items()}
 
 
 def evaluate_rag(response: str) -> bool:

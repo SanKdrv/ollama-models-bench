@@ -6,6 +6,7 @@ from typing import Any
 
 @dataclass(slots=True)
 class QualityCheck:
+    category: str
     prompt: str
     response: str
     score: float
@@ -23,6 +24,9 @@ class BenchmarkResult:
     vram_peak_mb: float | None
     quality_ru_label: str
     quality_ru_score: float
+    factual_score: float
+    instruction_following_score: float
+    formatting_score: float
     rag_passed: bool
     json_match: bool
     context_window: str
