@@ -1,0 +1,34 @@
+Metadata-Version: 2.4
+Name: ollama-models-bench
+Version: 0.1.0
+Summary: CLI benchmark tool for Ollama-hosted local LLMs
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: psutil>=5.9
+Requires-Dist: requests>=2.31
+Requires-Dist: rich>=13.7
+Provides-Extra: dev
+Requires-Dist: pytest>=8.2; extra == "dev"
+Dynamic: license-file
+
+# Ollama Models Bench
+
+CLI-инструмент для поочередного скачивания моделей через Ollama, замера базовых метрик и генерации отчетов в `md`, `csv` и `json`.
+
+## Запуск
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+ollama-bench --models llama3:8b,mistral --mode cpu --rounds 3 --output md
+```
+
+## Сборка в единый файл
+
+Проект совместим с упаковкой через `PyInstaller`, например:
+
+```bash
+pyinstaller --onefile -n ollama-bench src/ollama_bench/cli.py
+```

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ollama-models-bench"
+version = "0.1.0"
+description = "CLI benchmark tool for Ollama-hosted local LLMs"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "psutil>=5.9",
+  "requests>=2.31",
+  "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+]
+
+[project.scripts]
+ollama-bench = "ollama_bench.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

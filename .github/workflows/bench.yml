@@ -1,0 +1,26 @@
+name: Bench On Stand
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bench:
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python Environment
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e '.[dev]'
+
+      - name: Run Tests
+        run: |
+          .venv/bin/pytest
+
+      - name: Run Benchmark
+        run: |
+          .venv/bin/ollama-bench --models default_top --mode gpu --rounds 3 --output md

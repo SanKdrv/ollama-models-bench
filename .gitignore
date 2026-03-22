@@ -1,0 +1,7 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+benchmark_report_*.md
+benchmark_report_*.csv
+benchmark_report_*.json

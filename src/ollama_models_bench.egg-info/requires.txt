@@ -1,0 +1,6 @@
+psutil>=5.9
+requests>=2.31
+rich>=13.7
+
+[dev]
+pytest>=8.2
