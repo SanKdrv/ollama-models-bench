@@ -4,11 +4,10 @@ from ollama_bench.config import BenchmarkConfig, DEFAULT_MODELS
 def test_default_cpu_models_match_selected_ollama_search_page():
     assert DEFAULT_MODELS["cpu"] == [
         "command-r7b-arabic",
-        "magicoder",
         "notus",
         "medllama2",
         "mistrallite",
-        "meta-llama/Llama-3.1-8B",
+        "llama3.1:8b",
     ]
 
 

@@ -7,11 +7,10 @@ from pathlib import Path
 DEFAULT_MODELS = {
     "cpu": [
         "command-r7b-arabic",
-        "magicoder",
         "notus",
         "medllama2",
         "mistrallite",
-        "meta-llama/Llama-3.1-8B",
+        "llama3.1:8b",
     ],
     "gpu": ["llama3:8b", "mistral", "phi3", "qwen2"],
 }
