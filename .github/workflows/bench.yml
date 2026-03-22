@@ -14,8 +14,9 @@ jobs:
       - name: Setup Python Environment
         run: |
           if ! python3 -m venv .venv; then
-            python3 -m pip install --user virtualenv
-            python3 -m virtualenv .venv
+            sudo apt-get update
+            sudo apt-get install -y python3-venv python3-pip
+            python3 -m venv .venv
           fi
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/python -m pip install -e '.[dev]'
